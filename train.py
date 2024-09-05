@@ -1,7 +1,6 @@
 import torch
 from torch import nn
-from alexnet import AlexNet
-import numpy as np
+from Alexnet import AlexNet
 from torch.optim import lr_scheduler
 import os, time
 
@@ -43,7 +42,7 @@ val_transform = transforms.Compose([
 train_dataset = ImageFolder(ROOT_TRAIN, transform=train_transform)
 val_dataset = ImageFolder(ROOT_TEST, transform=val_transform)
 
-train_dataloader = DataLoader(train_dataset, batch_size=256, shuffle=True)
+train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=True)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -104,23 +103,25 @@ def val(dataloader, model, loss_fn):
     return val_loss, val_acc
 
 
-def matplot_loss(train_loss, val_loss):
+def matplot_loss(train_loss, val_loss, folder):
     plt.plot(train_loss, label='train_loss')
     plt.plot(val_loss, label='val_loss')
     plt.legend(loc='best')
     plt.ylabel('错误率 loss')
     plt.xlabel('训练次数 epoch')
     plt.title("训练集和验证集loss值对比图")
+    plt.savefig(f'{folder}/loss.png')
     plt.show()
 
 
-def matplot_acc(train_acc, val_acc):
+def matplot_acc(train_acc, val_acc, folder):
     plt.plot(train_acc, label='train_acc')
     plt.plot(val_acc, label='val_acc')
     plt.legend(loc='best')
     plt.ylabel('精确度 acc')
     plt.xlabel('训练次数 epoch')
     plt.title("训练集和验证集acc值对比图")
+    plt.savefig(f'{folder}/acc.png')
     plt.show()
 
 
@@ -130,7 +131,8 @@ acc_train = []
 loss_val = []
 acc_val = []
 
-epoch = 20
+folder = 'outputs'
+epoch = 1
 min_acc = 0
 for t in range(epoch):
     start = time.time()
@@ -147,17 +149,16 @@ for t in range(epoch):
 
     # 保存最好的模型权重
     if val_acc > min_acc:
-        folder = 'save_model'
         if not os.path.exists(folder):
-            os.mkdir('save_model')
+            os.mkdir(folder)
         min_acc = val_acc
         print(f"save best model, epoch {t + 1}")
-        torch.save(model.state_dict(), 'save_model/best_model.pth')
+        torch.save(model.state_dict(), f'{folder}/best_model.pth')
 
     if t == epoch - 1:
-        torch.save(model.state_dict(), 'save_model/best_model.pth')
+        torch.save(model.state_dict(), f'{folder}/latest_model.pth')
     print(f"epoch {t + 1} done in {time.time() - start:.3f} seconds\n-----------------------")
 
-matplot_loss(loss_train, loss_val)
-matplot_acc(acc_train, acc_val)
+matplot_loss(loss_train, loss_val, folder)
+matplot_acc(acc_train, acc_val, folder)
 print('Training Done!')

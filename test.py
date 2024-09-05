@@ -1,5 +1,5 @@
 import torch
-from alexnet import MyAlexNet
+from Alexnet import AlexNet
 from torch.autograd import Variable
 from torchvision import datasets, transforms
 from torchvision.transforms import ToTensor
