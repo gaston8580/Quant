@@ -14,10 +14,6 @@ import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
 
-# 解决中文显示问题
-plt.rcParams['font.sans-serif'] = ['SimHei']
-plt.rcParams['axes.unicode_minus'] = False
-
 ROOT_TRAIN = r'/data/sfs_turbo/perception/animals/train'
 ROOT_TEST = r'/data/sfs_turbo/perception/animals/val'
 
@@ -42,8 +38,8 @@ val_transform = transforms.Compose([
 train_dataset = ImageFolder(ROOT_TRAIN, transform=train_transform)
 val_dataset = ImageFolder(ROOT_TEST, transform=val_transform)
 
-train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=True)
+train_dataloader = DataLoader(train_dataset, batch_size=256, shuffle=True)
+val_dataloader = DataLoader(val_dataset, batch_size=256, shuffle=True)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = AlexNet().cuda()
@@ -107,22 +103,20 @@ def matplot_loss(train_loss, val_loss, folder):
     plt.plot(train_loss, label='train_loss')
     plt.plot(val_loss, label='val_loss')
     plt.legend(loc='best')
-    plt.ylabel('错误率 loss')
-    plt.xlabel('训练次数 epoch')
-    plt.title("训练集和验证集loss值对比图")
+    plt.ylabel('loss value')
+    plt.xlabel('epoch num')
+    plt.title("loss")
     plt.savefig(f'{folder}/loss.png')
-    plt.show()
 
 
 def matplot_acc(train_acc, val_acc, folder):
     plt.plot(train_acc, label='train_acc')
     plt.plot(val_acc, label='val_acc')
     plt.legend(loc='best')
-    plt.ylabel('精确度 acc')
-    plt.xlabel('训练次数 epoch')
-    plt.title("训练集和验证集acc值对比图")
+    plt.ylabel('acc value')
+    plt.xlabel('epoch num')
+    plt.title("accuracy")
     plt.savefig(f'{folder}/acc.png')
-    plt.show()
 
 
 # 开始训练
@@ -132,7 +126,7 @@ loss_val = []
 acc_val = []
 
 folder = 'outputs'
-epoch = 1
+epoch = 64
 min_acc = 0
 for t in range(epoch):
     start = time.time()
