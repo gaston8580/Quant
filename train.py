@@ -18,7 +18,7 @@ def visualize_loss_acc(train_loss, val_loss, train_acc, val_acc, folder, details
     plt.ylabel('loss value')
     plt.xlabel('epoch num')
     plt.title("loss")
-    plt.savefig(f'{folder}/loss_{details}.png')
+    plt.savefig(f'{folder}/logs/loss_{details}.png')
     plt.close()
 
     plt.plot(train_acc, label='train_acc')
@@ -27,7 +27,7 @@ def visualize_loss_acc(train_loss, val_loss, train_acc, val_acc, folder, details
     plt.ylabel('acc value')
     plt.xlabel('epoch num')
     plt.title("accuracy")
-    plt.savefig(f'{folder}/acc_{details}.png')
+    plt.savefig(f'{folder}/logs/acc_{details}.png')
     plt.close()
 
 
@@ -178,7 +178,7 @@ def train_model():
             torch.save(model.state_dict(), f'{args.output_dir}/latest_model.pth')
     
     if args.local_rank == 0:
-        visualize_loss_acc(train_loss_list, val_loss_list, train_acc_list, val_acc_list, args.output_dir + '/logs', details)
+        visualize_loss_acc(train_loss_list, val_loss_list, train_acc_list, val_acc_list, args.output_dir, details)
     logger.info('********************** End training **********************')
 
 
@@ -186,7 +186,7 @@ def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--batch_size', type=int, default=64, required=False, help='batch size for training')
     parser.add_argument('--lr', type=float, default=0.01, required=False, help='learning rate')
-    parser.add_argument('--epochs', type=int, default=50, required=False, help='number of epochs to train for')
+    parser.add_argument('--epochs', type=int, default=32, required=False, help='number of epochs to train for')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')
     parser.add_argument('--data_dir', type=str, default='/data/sfs_turbo/perception/animals/', help='data path')
     parser.add_argument('--output_dir', default='outputs', help='dir for saving ckpts and log files')
