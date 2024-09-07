@@ -1,4 +1,4 @@
-from Alexnet import AlexNet
+from models.Alexnet import AlexNet
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader

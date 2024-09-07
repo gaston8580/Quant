@@ -1,5 +1,5 @@
 import torch.nn as nn
-from Alexnet import AlexNet
+from models.Alexnet import AlexNet
 from tools import common_utils
 from torch.optim import lr_scheduler
 from torchvision import transforms
