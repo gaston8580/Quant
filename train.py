@@ -133,7 +133,7 @@ def train_model():
 
     model = AlexNet()
     if not args.without_sync_bn:
-        # 将模型中的BN层转换为同步批归一化(SyncBatchNorm): 一种在分布式训练中保持BN层统计一致性的技术，可以提升模型在多GPU训练时的性能。
+        # 将模型中的BN层转换为同步BN(SyncBatchNorm): 在分布式训练中保持BN层统计的一致性，可以提升模型在多GPU训练时的性能。
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model.cuda()
 
