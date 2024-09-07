@@ -32,10 +32,11 @@ def visualize_loss_acc(train_loss, val_loss, train_acc, val_acc, folder, details
 
 
 def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
-    normalize = transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # 图像像素值归一化到[-1, 1]
+    # transforms.Normalize(mean, std)
+    normalize = transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # 将[0,1]的像素值归一化到[-1,1]
     if training:
         transform = transforms.Compose([transforms.Resize((224, 224)),
-                                        transforms.RandomVerticalFlip(),  # 随机垂直全展, 增强数据
+                                        transforms.RandomVerticalFlip(),  # 随机垂直翻转, 增强数据
                                         transforms.ToTensor(),
                                         normalize])
         dataset = ImageFolder(data_dir + '/train', transform=transform)
@@ -62,7 +63,7 @@ def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
 def train_one_epoch(dataloader, model, optimizer, loss_fn):
     model.train()
     loss, current, n = 0.0, 0.0, 0
-    for batch, (x, y) in enumerate(dataloader):
+    for _, (x, y) in enumerate(dataloader):
         image, y = x.cuda(), y.cuda()
         output = model(image)
         cur_loss = loss_fn(output, y)
@@ -85,7 +86,7 @@ def eval_one_epoch(dataloader, model, loss_fn):
     model.eval()
     loss, current, n = 0.0, 0.0, 0
     with torch.no_grad():
-        for batch, (x, y) in enumerate(dataloader):
+        for _, (x, y) in enumerate(dataloader):
             image, y = x.cuda(), y.cuda()
             output = model(image)
             cur_loss = loss_fn(output, y)
@@ -114,6 +115,7 @@ def train_model():
         total_gpus, args.local_rank = getattr(common_utils, f'init_dist_{args.launcher}') \
                                         (args.tcp_port, args.local_rank, backend='nccl')
     
+    batch_size = args.batch_size // total_gpus
     os.makedirs(args.output_dir + '/logs', exist_ok=True)
     details = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     log_file = os.path.join(args.output_dir, f'logs/log_train_{details}.txt')
@@ -122,17 +124,16 @@ def train_model():
     logger.info('********************** Start logging **********************')
     logger.info(f'CUDA DEVICES = {[i for i in range(torch.cuda.device_count())]}')
     if dist:
-        logger.info('total_batch_size: %d' % (total_gpus * args.batch_size))
+        logger.info(f'batch size per gpu: {batch_size}')
     for key, val in vars(args).items():
         logger.info('{:16} {}'.format(key, val))
     
-    train_loader, train_sampler = build_dataloader(dist, args.data_dir, args.batch_size, args.workers, training=True)
-    val_loader, _ = build_dataloader(dist, args.data_dir, args.batch_size, args.workers, training=False)
+    train_loader, train_sampler = build_dataloader(dist, args.data_dir, batch_size, args.workers, training=True)
+    val_loader, _ = build_dataloader(dist, args.data_dir, batch_size, args.workers, training=False)
 
     model = AlexNet()
     if not args.without_sync_bn:
-        # 如果args.without_sync_bn为False，则将模型中的BN层转换为同步批归一化（SyncBatchNorm），同步批归一化是一种在分布式训练中
-        # 保持BN层统计一致性的技术，可以提升模型在多GPU训练时的性能。
+        # 将模型中的BN层转换为同步批归一化(SyncBatchNorm): 一种在分布式训练中保持BN层统计一致性的技术，可以提升模型在多GPU训练时的性能。
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model.cuda()
 
@@ -184,7 +185,7 @@ def train_model():
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--batch_size', type=int, default=64, required=False, help='batch size for training')
+    parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
     parser.add_argument('--lr', type=float, default=0.01, required=False, help='learning rate')
     parser.add_argument('--epochs', type=int, default=32, required=False, help='number of epochs to train for')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')

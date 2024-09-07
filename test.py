@@ -1,71 +1,87 @@
-import torch
 from Alexnet import AlexNet
-from torch.autograd import Variable
-from torchvision import datasets, transforms
-from torchvision.transforms import ToTensor
-from torchvision.transforms import ToPILImage
+from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+import torch, os, argparse, time
 
-ROOT_TRAIN = r'C:/Users/Hugo/Desktop/python/data/train'
-ROOT_TEST = r'C:/Users/Hugo/Desktop/python/data/val'
 
-# 将图像的像素值归一化到[-1, 1]之间
-normalize = transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+def visualize_image(image_tensor, title=None, cmap=None):
+    """
+    args:
+        image_tensor (torch.Tensor): shape为 (C, H, W) 或 (H, W) 的图像张量
+        title (str, optional): 图像标题
+        cmap (str, optional): 用于灰度图像的颜色映射
+    """
+    image_tensor = (image_tensor + 1) / 2  # 将[-1,1]的像素值恢复到[0,1]
+    image_np = image_tensor.cpu().numpy()
+    # 处理灰度图像
+    if image_np.ndim == 2:
+        plt.imshow(image_np, cmap=cmap)
+    # 处理彩色图像
+    elif image_np.ndim == 3:
+        if image_np.shape[0] == 3:  # (C, H, W) -> (H, W, C)
+            image_np = image_np.transpose(1, 2, 0)
+        plt.imshow(image_np)
+    else:
+        raise ValueError('The dimension of the image tensor must be 2 or 3')
+    
+    if title:
+        plt.title(title)
+    plt.axis('off')  # 隐藏坐标轴
+    plt.show()
+    plt.close()
 
-# 训练集
-train_transform = transforms.Compose([
-    transforms.Resize((224, 224)),  # 论文要求
-    transforms.RandomVerticalFlip(),  # 随机垂直全展 让数据集变多
-    transforms.ToTensor(),  # 转化为张量
-    normalize
-])
 
-# 验证集
-val_transform = transforms.Compose([
-    transforms.Resize((224, 224)),  # 论文要求
-    transforms.ToTensor()  # 转化为张量
-])
+def build_dataloader(data_dir, batch_size, workers=4):
+    # transforms.Normalize(mean, std)
+    normalize = transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # 将[0,1]的像素值归一化到[-1,1]
+    transform = transforms.Compose([transforms.Resize((224, 224)),
+                                    transforms.ToTensor(),
+                                    normalize])
+    dataset = ImageFolder(data_dir + '/val', transform=transform)
+    dataloader = DataLoader(dataset, batch_size=batch_size, pin_memory=True, num_workers=workers, 
+                            shuffle=True, sampler=None)
+    return dataloader
 
-train_dataset = ImageFolder(ROOT_TRAIN, transform=train_transform)
-val_dataset = ImageFolder(ROOT_TEST, transform=val_transform)
 
-train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=True)
-
-# 运用GUP训练
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-model = MyAlexNet().to(device)
-
-# 加载模型
-model.load_state_dict(torch.load("C:/Users/Hugo/Desktop/python/save_model/best_model.pth"))
-
-# 获取预测结果
-classes = [
-    "cat",
-    "dog",
-]
-
-# 把张量转化为照片模式
-show = ToPILImage()
-
-# 进入到验证阶段
-model.eval()
-t, f = 0, 0
-for i in range(100):
-    x, y = val_dataset[i][0], val_dataset[i][1]
-    # show(x).show()
-    x = Variable(torch.unsqueeze(x, dim=0).float(), requires_grad=True).to(device)
-    x = torch.tensor(x).to(device)
+def eval_one_epoch(dataloader, model):
+    classes = {0: "cat", 1: "dog"}
+    model.eval()
     with torch.no_grad():
-        pred = model(x)
-        predicted, actual = classes[torch.argmax(pred[0])], classes[y]
-        print(f'{i + 1} predicted:"{predicted}“, actual:"{actual}"')
-        if predicted is actual:
-            t += 1
-        else:
-            f += 1
-    print(f'正确率：{t / (t + f)}')
-    # print(f'正确数：{t}')
-    # print(f'错误数：{f}')
+        for _, (x, y) in enumerate(dataloader):
+            image, y = x.cuda(), y.item()
+            pred = model(image)
+            pred_class = torch.argmax(pred[0]).item()
+            predicted, gt = classes[pred_class], classes[y]
+            visualize_image(image[0], title=f'predicted: {predicted}, ground truth: {gt}')
+            # time.sleep(0.5)
+
+
+def eval_single_ckpt():
+    args = parse_config()
+
+    model = AlexNet()
+    model.cuda()
+    ckpt_path = os.path.join(args.output_dir, args.ckpt)
+    if 'module' in list(torch.load(ckpt_path))[0]:
+        model = torch.nn.DataParallel(model)
+    model.load_state_dict(torch.load(ckpt_path))
+
+    val_loader = build_dataloader(args.data_dir, batch_size=1, workers=1)
+    eval_one_epoch(val_loader, model)
+
+
+def parse_config():
+    parser = argparse.ArgumentParser(description='arg parser')
+    parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
+    parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')
+    parser.add_argument('--data_dir', type=str, default='/data/sfs_turbo/perception/animals/', help='data path')
+    parser.add_argument('--output_dir', default='outputs', help='dir for saving ckpts and log files')
+    parser.add_argument('--ckpt', type=str, default='best_model.pth', help='checkpoint to start from')
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == '__main__':
+    eval_single_ckpt()
