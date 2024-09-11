@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import torch, os, time, argparse, warnings, datetime
 
 warnings.filterwarnings('ignore')
+torch.set_printoptions(sci_mode=False)
 
 
 def visualize_loss_acc(train_loss, val_loss, train_acc, val_acc, folder, details):
@@ -118,7 +119,7 @@ def train_model():
     batch_size = args.batch_size // total_gpus
     os.makedirs(args.output_dir + '/logs', exist_ok=True)
     details = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    log_file = os.path.join(args.output_dir, f'logs/log_train_{details}.txt')
+    log_file = os.path.join(args.output_dir, f'logs/log_train_{details}.txt') if not args.debug else None
     logger = common_utils.create_logger(log_file, rank=args.local_rank)
 
     logger.info('********************** Start logging **********************')
@@ -138,7 +139,7 @@ def train_model():
     model.cuda()
 
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)   # lr每10个epoch变为原来的0.5, TODO: 优化学习率调度器, 20240906    
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)  # lr每10个epoch变为原来的0.5, TODO: 优化学习率调度器, 20240906    
     loss_fn = nn.CrossEntropyLoss()
 
     model.train()  # before wrap to DistributedDataParallel to support to fix some parameters
@@ -153,6 +154,7 @@ def train_model():
 
     # TODO: 加入tensorboard, 20240906
     train_loss_list, train_acc_list, val_loss_list, val_acc_list, max_acc = [], [], [], [], 0
+    # train!!!
     for cur_epoch in range(args.epochs):
         start = time.time()
         torch.cuda.empty_cache()
@@ -192,6 +194,7 @@ def parse_config():
     parser.add_argument('--data_dir', type=str, default='/data/sfs_turbo/perception/animals/', help='data path')
     parser.add_argument('--output_dir', default='outputs', help='dir for saving ckpts and log files')
     parser.add_argument('--ckpt', type=str, default=None, help='checkpoint to start from')
+    parser.add_argument('--debug', type=int, default=1, help='whether in debug mode')
     parser.add_argument('--pretrained_model', type=str, default=None, help='pretrained_model')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm'], default='none')
     parser.add_argument('--tcp_port', type=int, default=18888, help='tcp port for distrbuted training')
