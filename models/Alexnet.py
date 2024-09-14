@@ -1,9 +1,12 @@
 import torch
 from torch import nn
+from torch.quantization import QuantStub, DeQuantStub
 
 class AlexNet(nn.Module):
     def __init__(self):
         super(AlexNet, self).__init__()
+        self.quant = QuantStub()
+        self.dequant = DeQuantStub()
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=96, kernel_size=11, stride=4),
             nn.ReLU(),
@@ -35,8 +38,10 @@ class AlexNet(nn.Module):
         )
 
     def forward(self, img):
+        img = self.quant(img)
         feature = self.conv(img)
-        output = self.fc(feature.view(img.shape[0], -1))
+        output = self.fc(feature.contiguous().reshape(img.shape[0], -1))
+        output = self.dequant(output)
         return output
 
 

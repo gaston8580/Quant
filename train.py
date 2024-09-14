@@ -33,8 +33,7 @@ def visualize_loss_acc(train_loss, val_loss, train_acc, val_acc, folder, details
 
 
 def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
-    # transforms.Normalize(mean, std)
-    normalize = transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # 将[0,1]的像素值归一化到[-1,1]
+    normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # 将[0,1]的像素值归一化到[-1,1]
     if training:
         transform = transforms.Compose([transforms.Resize((224, 224)),
                                         transforms.RandomVerticalFlip(),  # 随机垂直翻转, 增强数据
