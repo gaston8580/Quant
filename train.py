@@ -175,9 +175,15 @@ def train_model():
         if val_acc > max_acc and args.local_rank == 0:
             max_acc = val_acc
             logger.info(f"save best model, epoch {cur_epoch + 1}")
-            torch.save(model.state_dict(), f'{args.output_dir}/best_model.pth')
+            if dist:
+                torch.save(model.module.state_dict(), f'{args.output_dir}/float_model.pth')
+            else:
+                torch.save(model.state_dict(), f'{args.output_dir}/float_model.pth')
         if cur_epoch == args.epochs - 1 and args.local_rank == 0:
-            torch.save(model.state_dict(), f'{args.output_dir}/latest_model.pth')
+            if dist:
+                torch.save(model.module.state_dict(), f'{args.output_dir}/latest_model.pth')
+            else:
+                torch.save(model.state_dict(), f'{args.output_dir}/latest_model.pth')
     
     if args.local_rank == 0:
         visualize_loss_acc(train_loss_list, val_loss_list, train_acc_list, val_acc_list, args.output_dir, details)
@@ -193,7 +199,7 @@ def parse_config():
     parser.add_argument('--data_dir', type=str, default='/data/sfs_turbo/perception/animals/', help='data path')
     parser.add_argument('--output_dir', default='outputs', help='dir for saving ckpts and log files')
     parser.add_argument('--ckpt', type=str, default=None, help='checkpoint to start from')
-    parser.add_argument('--debug', type=int, default=1, help='whether in debug mode')
+    parser.add_argument('--debug', type=int, default=0, help='whether in debug mode')
     parser.add_argument('--pretrained_model', type=str, default=None, help='pretrained_model')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm'], default='none')
     parser.add_argument('--tcp_port', type=int, default=18888, help='tcp port for distrbuted training')

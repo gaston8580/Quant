@@ -1,9 +1,10 @@
+import matplotlib.pyplot as plt
+import torch, os, argparse, time
 from models.Alexnet import AlexNet
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-import torch, os, argparse, time
+from tools.quantization_utils import default_calibration_qconfig_setter
 
 
 def visualize_image(image_tensor, title=None, cmap=None):
@@ -60,12 +61,14 @@ def eval_one_epoch(dataloader, model):
 
 def eval_single_ckpt():
     args = parse_config()
+    ckpt_path = os.path.join(args.output_dir, f'{args.stage}_model.pth')
 
     model = AlexNet()
     model.cuda()
-    ckpt_path = os.path.join(args.output_dir, args.ckpt)
-    if 'module' in list(torch.load(ckpt_path))[0]:
-        model = torch.nn.DataParallel(model)
+    if args.stage == 'calibration':
+        model.qconfig = default_calibration_qconfig_setter()
+        torch.quantization.prepare(model, inplace=True)  # Insert observers
+        torch.quantization.convert(model, inplace=True)  # Convert model
     model.load_state_dict(torch.load(ckpt_path))
 
     val_loader = build_dataloader(args.data_dir, batch_size=1, workers=1)
@@ -74,11 +77,14 @@ def eval_single_ckpt():
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
+    parser.add_argument("--stage", type=str, 
+                        # default='float', 
+                        default='calibration', 
+                        required=False, help="the predict stage")
     parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')
     parser.add_argument('--data_dir', type=str, default='/data/sfs_turbo/perception/animals/', help='data path')
     parser.add_argument('--output_dir', default='outputs', help='dir for saving ckpts and log files')
-    parser.add_argument('--ckpt', type=str, default='best_model.pth', help='checkpoint to start from')
     args = parser.parse_args()
     return args
 
