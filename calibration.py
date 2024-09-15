@@ -8,7 +8,7 @@ from torch.quantization.observer import MinMaxObserver
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
-from tools.quantization_utils import default_calibration_qconfig_setter
+from tools.quantization_utils import convert_model_float2qat
 
 
 def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
@@ -40,10 +40,7 @@ def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
 
 
 def calibrate_model(args, dataloader, model):
-    # model.qconfig = torch.quantization.default_qconfig
-    model.qconfig = default_calibration_qconfig_setter()
-    torch.quantization.prepare(model, inplace=True)  # Insert observers
-
+    convert_model_float2qat(model)
     model.eval()
     with torch.no_grad():
         start = time.time()
@@ -53,11 +50,13 @@ def calibrate_model(args, dataloader, model):
             image, label = (image.cuda(), label.cuda()) if args.mode == 'cuda' else (image, label)
             model(image)
         print(f"Calibration time: {time.time() - start:.3f} seconds")
-    torch.quantization.convert(model, inplace=True)  # Convert model
+    
+    torch.save(model.state_dict(), f'{args.output_dir}/calibration_model.pth')
     return model
 
 
 def eval_calibration_model(args, dataloader, model):
+    torch.quantization.convert(model, inplace=True)  # Convert model
     model.eval()
     loss_fn = nn.CrossEntropyLoss()
     loss, current, n = 0.0, 0.0, 0
@@ -75,7 +74,6 @@ def eval_calibration_model(args, dataloader, model):
             pbar.set_postfix({"loss": loss / n, "accuracy": current / n})  # 设置进度条信息
             pbar.update(1)  # 更新进度条
     pbar.close()
-    torch.save(model.state_dict(), f'{args.output_dir}/calibration_model.pth')
 
 
 def calibration():

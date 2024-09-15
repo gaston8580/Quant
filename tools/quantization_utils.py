@@ -1,5 +1,6 @@
 import torch
 from torch.quantization.observer import MinMaxObserver
+from torch.quantization import default_weight_fake_quant, default_observer
 
 
 class SymmetricObserver(MinMaxObserver):
@@ -20,3 +21,21 @@ def default_calibration_qconfig_setter():
         activation=SymmetricObserver.with_args(dtype=torch.qint8),
         )
     return qconfig
+
+
+def default_qat_qconfig_setter():
+    qconfig = torch.quantization.QConfig(
+        weight=default_weight_fake_quant,
+        activation=SymmetricObserver.with_args(dtype=torch.qint8),
+        )
+    return qconfig
+
+
+def convert_model_float2calibration(model):
+    model.qconfig = default_calibration_qconfig_setter()
+    torch.quantization.prepare(model, inplace=True)  # Insert observers
+
+
+def convert_model_float2qat(model):
+    model.qconfig = default_qat_qconfig_setter()
+    torch.quantization.prepare_qat(model, inplace=True)  # Insert observers and fake quantizers

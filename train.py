@@ -1,12 +1,13 @@
 import torch.nn as nn
+import matplotlib.pyplot as plt
+import torch, os, time, argparse, warnings, datetime
 from models.Alexnet import AlexNet
 from tools import common_utils
 from torch.optim import lr_scheduler
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-import torch, os, time, argparse, warnings, datetime
+from tools.quantization_utils import convert_model_float2qat
 
 warnings.filterwarnings('ignore')
 torch.set_printoptions(sci_mode=False)
@@ -82,7 +83,8 @@ def train_one_epoch(dataloader, model, optimizer, loss_fn):
     return train_loss, train_acc
 
 
-def eval_one_epoch(dataloader, model, loss_fn):
+def eval_one_epoch(args, dataloader, model, loss_fn):
+    model = torch.quantization.convert(model) if args.stage == 'qat' else model
     model.eval()
     loss, current, n = 0.0, 0.0, 0
     with torch.no_grad():
@@ -132,11 +134,18 @@ def train_model():
     val_loader, _ = build_dataloader(dist, args.data_dir, batch_size, args.workers, training=False)
 
     model = AlexNet()
+    model.cuda()
+
+    if args.stage == 'qat':
+        args.epochs = args.qat_epochs
+        convert_model_float2qat(model)
+        ckpt_path = os.path.join(args.output_dir, 'calibration_model.pth')
+        model.load_state_dict(torch.load(ckpt_path))
+
     if not args.without_sync_bn:
         # 将模型中的BN层转换为同步BN(SyncBatchNorm): 在分布式训练中保持BN层统计的一致性，可以提升模型在多GPU训练时的性能。
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    model.cuda()
-
+    
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)  # lr每10个epoch变为原来的0.5, TODO: 优化学习率调度器, 20240906    
     loss_fn = nn.CrossEntropyLoss()
@@ -161,7 +170,7 @@ def train_model():
             train_sampler.set_epoch(cur_epoch)
         
         train_loss, train_acc = train_one_epoch(train_loader, model, optimizer, loss_fn)
-        val_loss, val_acc = eval_one_epoch(val_loader, model, loss_fn)
+        val_loss, val_acc = eval_one_epoch(args, val_loader, model, loss_fn)
         scheduler.step()
 
         train_loss_list.append(train_loss)
@@ -174,32 +183,30 @@ def train_model():
         # save model
         if val_acc > max_acc and args.local_rank == 0:
             max_acc = val_acc
-            logger.info(f"save best model, epoch {cur_epoch + 1}")
+            save_model = torch.quantization.convert(model) if args.stage == 'qat' else model
             if dist:
-                torch.save(model.module.state_dict(), f'{args.output_dir}/float_model.pth')
+                torch.save(save_model.module.state_dict(), f'{args.output_dir}/{args.stage}_model.pth')
             else:
-                torch.save(model.state_dict(), f'{args.output_dir}/float_model.pth')
-        if cur_epoch == args.epochs - 1 and args.local_rank == 0:
-            if dist:
-                torch.save(model.module.state_dict(), f'{args.output_dir}/latest_model.pth')
-            else:
-                torch.save(model.state_dict(), f'{args.output_dir}/latest_model.pth')
+                torch.save(save_model.state_dict(), f'{args.output_dir}/{args.stage}_model.pth')
+            logger.info(f"saved best model, epoch {cur_epoch + 1}")
     
-    if args.local_rank == 0:
+    if args.local_rank == 0 and not args.debug:
         visualize_loss_acc(train_loss_list, val_loss_list, train_acc_list, val_acc_list, args.output_dir, details)
     logger.info('********************** End training **********************')
 
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
+    parser.add_argument('--stage', type=str, default='qat', required=False, help='the train stage')
     parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
     parser.add_argument('--lr', type=float, default=0.01, required=False, help='learning rate')
-    parser.add_argument('--epochs', type=int, default=32, required=False, help='number of epochs to train for')
+    parser.add_argument('--epochs', type=int, default=32, required=False, help='number of epochs to train')
+    parser.add_argument('--qat_epochs', type=int, default=20, required=False, help='number of epochs to qat')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')
     parser.add_argument('--data_dir', type=str, default='/data/sfs_turbo/perception/animals/', help='data path')
     parser.add_argument('--output_dir', default='outputs', help='dir for saving ckpts and log files')
     parser.add_argument('--ckpt', type=str, default=None, help='checkpoint to start from')
-    parser.add_argument('--debug', type=int, default=0, help='whether in debug mode')
+    parser.add_argument('--debug', type=bool, default=False, help='whether in debug mode')
     parser.add_argument('--pretrained_model', type=str, default=None, help='pretrained_model')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm'], default='none')
     parser.add_argument('--tcp_port', type=int, default=18888, help='tcp port for distrbuted training')

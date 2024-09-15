@@ -1,6 +1,6 @@
-|  AlexNet  |float| calibration |  qat |
-|-----------|-----|-------------|------|
-| train loss|0.043|      -      | xxxx |
-| train acc |0.985|      -      | xxxx |
-| val loss  |0.332|     0.286   | xxxx |
-| val acc   |0.907|     0.904   | xxxx |
+|  AlexNet  |float| calibration |  qat  |
+|-----------|-----|-------------|-------|
+| train loss|0.050|      -      | 0.108 |
+| train acc |0.983|      -      | 0.959 |
+| val loss  |0.333|     0.281   | 0.264 |
+| val acc   |0.895|     0.903   | 0.900 |

@@ -4,7 +4,7 @@ from models.Alexnet import AlexNet
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
-from tools.quantization_utils import default_calibration_qconfig_setter
+from tools.quantization_utils import convert_model_float2calibration, convert_model_float2qat
 
 
 def visualize_image(image_tensor, title=None, cmap=None):
@@ -65,11 +65,16 @@ def eval_single_ckpt():
 
     model = AlexNet()
     model.cuda()
-    if args.stage == 'calibration':
-        model.qconfig = default_calibration_qconfig_setter()
-        torch.quantization.prepare(model, inplace=True)  # Insert observers
-        torch.quantization.convert(model, inplace=True)  # Convert model
-    model.load_state_dict(torch.load(ckpt_path))
+    if args.stage != 'float':
+        convert_model_float2qat(model)
+    if args.stage == 'qat':
+        torch.quantization.convert(model, inplace=True)
+        model.load_state_dict(torch.load(ckpt_path))
+    elif args.stage == 'calibration':
+        model.load_state_dict(torch.load(ckpt_path))
+        torch.quantization.convert(model, inplace=True)
+    else:
+        model.load_state_dict(torch.load(ckpt_path))
 
     val_loader = build_dataloader(args.data_dir, batch_size=1, workers=1)
     eval_one_epoch(val_loader, model)
@@ -77,9 +82,7 @@ def eval_single_ckpt():
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument("--stage", type=str, 
-                        # default='float', 
-                        default='calibration', 
+    parser.add_argument('--stage', type=str, default='qat', choices=['float', 'calibration', 'qat'], 
                         required=False, help="the predict stage")
     parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')
