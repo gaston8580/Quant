@@ -4,11 +4,10 @@ import torch, os, argparse, time
 from tqdm import tqdm
 from models.Alexnet import AlexNet
 from tools import common_utils
-from torch.quantization.observer import MinMaxObserver
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
-from tools.quantization_utils import convert_model_float2qat
+from tools.quantization_utils import convert_model_float2qat, convert_model_float2calibration
 
 
 def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
@@ -40,7 +39,7 @@ def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
 
 
 def calibrate_model(args, dataloader, model):
-    convert_model_float2qat(model)
+    convert_model_float2calibration(model)
     model.eval()
     with torch.no_grad():
         start = time.time()
@@ -51,12 +50,18 @@ def calibrate_model(args, dataloader, model):
             model(image)
         print(f"Calibration time: {time.time() - start:.3f} seconds")
     
-    torch.save(model.state_dict(), f'{args.output_dir}/calibration_model.pth')
+    torch.save(model.state_dict(), f'{args.output_dir}/{args.model}/calibration_model.pth')
+    return model
+
+
+def fuse_model_and_convert(model):
+    model.fuse_model()
+    torch.quantization.convert(model, inplace=True)  # Convert model
     return model
 
 
 def eval_calibration_model(args, dataloader, model):
-    torch.quantization.convert(model, inplace=True)  # Convert model
+    model = fuse_model_and_convert(model)
     model.eval()
     loss_fn = nn.CrossEntropyLoss()
     loss, current, n = 0.0, 0.0, 0
@@ -71,16 +76,14 @@ def eval_calibration_model(args, dataloader, model):
             loss += cur_loss.item()
             current += cur_acc.item()
             n += 1
-            pbar.set_postfix({"loss": loss / n, "accuracy": current / n})  # 设置进度条信息
+            pbar.set_postfix({"loss": f"{loss / n:.3f}", "accuracy": f"{current / n:.3f}"})  # 设置进度条信息
             pbar.update(1)  # 更新进度条
     pbar.close()
 
 
-def calibration():
-    args = parse_config()
-    ckpt_path = os.path.join(args.output_dir, args.ckpt)
+def calibration(args, model):
+    ckpt_path = os.path.join(args.output_dir, args.model, args.ckpt)
 
-    model = AlexNet()
     model = model.cuda() if args.mode == 'cuda' else model
     model.load_state_dict(torch.load(ckpt_path))
 
@@ -92,6 +95,8 @@ def calibration():
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
+    parser.add_argument('--model', type=str, default='ResNet18', choices=['AlexNet', 'ResNet18'], required=False, 
+                        help='model name')
     parser.add_argument('--mode', type=str, default='cuda', required=False, help='gpu or cpu')
     parser.add_argument('--batch_size', type=int, default=32, required=False, help='batch size for training')
     parser.add_argument('--steps', type=int, default=10, required=False, help='step nums for calibration')
@@ -104,4 +109,8 @@ def parse_config():
 
 
 if __name__ == '__main__':
-    calibration()
+    args = parse_config()
+    models = common_utils.get_model_map()
+    model = models[args.model]()
+
+    calibration(args, model)

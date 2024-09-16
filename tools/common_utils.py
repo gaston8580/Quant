@@ -1,7 +1,5 @@
 # Motion Transformer (MTR): https://arxiv.org/abs/2209.13508
 # Published at NeurIPS 2022
-
-
 import numpy as np
 import torch
 import logging
@@ -12,6 +10,12 @@ import subprocess
 import pickle
 import shutil
 from torch import Tensor
+from models.Alexnet import AlexNet
+from models.ResNet18 import ResNet18
+
+
+def get_model_map():
+    return {'AlexNet': AlexNet, 'ResNet18': ResNet18}
 
 
 def check_numpy_to_torch(x):

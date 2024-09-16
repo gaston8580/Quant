@@ -1,7 +1,6 @@
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import torch, os, time, argparse, warnings, datetime
-from models.Alexnet import AlexNet
 from tools import common_utils
 from torch.optim import lr_scheduler
 from torchvision import transforms
@@ -20,7 +19,7 @@ def visualize_loss_acc(train_loss, val_loss, train_acc, val_acc, folder, details
     plt.ylabel('loss value')
     plt.xlabel('epoch num')
     plt.title("loss")
-    plt.savefig(f'{folder}/logs/loss_{details}.png')
+    plt.savefig(f'{folder}/loss_{details}.png')
     plt.close()
 
     plt.plot(train_acc, label='train_acc')
@@ -29,7 +28,7 @@ def visualize_loss_acc(train_loss, val_loss, train_acc, val_acc, folder, details
     plt.ylabel('acc value')
     plt.xlabel('epoch num')
     plt.title("accuracy")
-    plt.savefig(f'{folder}/logs/acc_{details}.png')
+    plt.savefig(f'{folder}/acc_{details}.png')
     plt.close()
 
 
@@ -103,8 +102,7 @@ def eval_one_epoch(args, dataloader, model, loss_fn):
     return val_loss, val_acc
 
 
-def train_model():
-    args = parse_config()
+def train_model(args, model):
     if args.launcher == 'none':
         dist = False
         total_gpus = 1
@@ -118,9 +116,9 @@ def train_model():
                                         (args.tcp_port, args.local_rank, backend='nccl')
     
     batch_size = args.batch_size // total_gpus
-    os.makedirs(args.output_dir + '/logs', exist_ok=True)
+    os.makedirs(f'{args.output_dir}/{args.model}/logs', exist_ok=True)
     details = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    log_file = os.path.join(args.output_dir, f'logs/log_train_{details}.txt') if not args.debug else None
+    log_file = os.path.join(args.output_dir, args.model, f'logs/log_train_{details}.txt') if not args.debug else None
     logger = common_utils.create_logger(log_file, rank=args.local_rank)
 
     logger.info('********************** Start logging **********************')
@@ -133,21 +131,19 @@ def train_model():
     train_loader, train_sampler = build_dataloader(dist, args.data_dir, batch_size, args.workers, training=True)
     val_loader, _ = build_dataloader(dist, args.data_dir, batch_size, args.workers, training=False)
 
-    model = AlexNet()
-    model.cuda()
-
     if args.stage == 'qat':
         args.epochs = args.qat_epochs
         convert_model_float2qat(model)
-        ckpt_path = os.path.join(args.output_dir, 'calibration_model.pth')
+        ckpt_path = os.path.join(args.output_dir, args.model, 'calibration_model.pth')
         model.load_state_dict(torch.load(ckpt_path))
-
+    
+    model.cuda()
     if not args.without_sync_bn:
         # 将模型中的BN层转换为同步BN(SyncBatchNorm): 在分布式训练中保持BN层统计的一致性，可以提升模型在多GPU训练时的性能。
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)  # lr每10个epoch变为原来的0.5, TODO: 优化学习率调度器, 20240906    
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)  # lr每10个epoch x0.5, TODO: 尝试cos学习率, 20240916    
     loss_fn = nn.CrossEntropyLoss()
 
     model.train()  # before wrap to DistributedDataParallel to support to fix some parameters
@@ -185,23 +181,27 @@ def train_model():
             max_acc = val_acc
             save_model = torch.quantization.convert(model) if args.stage == 'qat' else model
             if dist:
-                torch.save(save_model.module.state_dict(), f'{args.output_dir}/{args.stage}_model.pth')
+                torch.save(save_model.module.state_dict(), f'{args.output_dir}/{args.model}/{args.stage}_model.pth')
             else:
-                torch.save(save_model.state_dict(), f'{args.output_dir}/{args.stage}_model.pth')
+                torch.save(save_model.state_dict(), f'{args.output_dir}/{args.model}/{args.stage}_model.pth')
             logger.info(f"saved best model, epoch {cur_epoch + 1}")
     
     if args.local_rank == 0 and not args.debug:
-        visualize_loss_acc(train_loss_list, val_loss_list, train_acc_list, val_acc_list, args.output_dir, details)
+        visualize_loss_acc(train_loss_list, val_loss_list, train_acc_list, val_acc_list, 
+                           f'{args.output_dir}/{args.model}/logs', details)
     logger.info('********************** End training **********************')
 
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--stage', type=str, default='qat', required=False, help='the train stage')
+    parser.add_argument('--model', type=str, default='ResNet18', choices=['AlexNet', 'ResNet18'], required=False, 
+                        help='model name')
+    parser.add_argument('--stage', type=str, default='qat', choices=['float', 'qat'], required=False, 
+                        help='the train stage')
     parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
     parser.add_argument('--lr', type=float, default=0.01, required=False, help='learning rate')
     parser.add_argument('--epochs', type=int, default=32, required=False, help='number of epochs to train')
-    parser.add_argument('--qat_epochs', type=int, default=20, required=False, help='number of epochs to qat')
+    parser.add_argument('--qat_epochs', type=int, default=10, required=False, help='number of epochs to qat')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')
     parser.add_argument('--data_dir', type=str, default='/data/sfs_turbo/perception/animals/', help='data path')
     parser.add_argument('--output_dir', default='outputs', help='dir for saving ckpts and log files')
@@ -225,4 +225,8 @@ def parse_config():
     return args
 
 if __name__ == '__main__':
-    train_model()
+    args = parse_config()
+    models = common_utils.get_model_map()
+    model = models[args.model]()
+
+    train_model(args, model)  # train float or qat model
