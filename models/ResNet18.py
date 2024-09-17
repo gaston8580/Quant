@@ -1,8 +1,7 @@
 import torch
-from torch import nn
-import torch.nn.functional as F
-import torch.nn.quantized
-from torch.quantization import QuantStub, DeQuantStub
+import torch.nn as nn
+import torch.ao.quantization as quant
+from torch.nn.quantized import FloatFunctional
 
 
 class Residual(nn.Module):
@@ -17,7 +16,7 @@ class Residual(nn.Module):
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.bn2 = nn.BatchNorm2d(out_channels)
         self.relu = nn.ReLU()
-        self.residual_add = torch.nn.quantized.FloatFunctional()
+        self.residual_add = FloatFunctional()
 
     def forward(self, X):
         Y = self.relu(self.bn1(self.conv1(X)))
@@ -28,16 +27,19 @@ class Residual(nn.Module):
         return self.relu(Y)
     
     def fuse_modules(self):
-        fuse_list1, fuse_list2 = ['conv1', 'bn1'], ['conv2', 'bn2']
-        torch.quantization.fuse_modules(self, fuse_list1, inplace=True)
-        torch.quantization.fuse_modules(self, fuse_list2, inplace=True)
+        quant.fuse_modules(self, ['conv1', 'bn1'], inplace=True)
+        quant.fuse_modules(self, ['conv2', 'bn2'], inplace=True)
+    
+    def fuse_modules_qat(self):
+        quant.fuse_modules_qat(self, ['conv1', 'bn1'], inplace=True)
+        quant.fuse_modules_qat(self, ['conv2', 'bn2'], inplace=True)
 
 
 class ResNet18(nn.Module):
     def __init__(self):
         super(ResNet18, self).__init__()
-        self.quant = QuantStub()
-        self.dequant = DeQuantStub()
+        self.quant = quant.QuantStub()
+        self.dequant = quant.DeQuantStub()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU()
@@ -79,7 +81,7 @@ class ResNet18(nn.Module):
         return X
     
     def fuse_model(self):
-        torch.quantization.fuse_modules(self, ['conv1', 'bn1'], inplace=True)
+        quant.fuse_modules(self, ['conv1', 'bn1'], inplace=True)
         for i in range(len(self.resnet_block1)):
             self.resnet_block1[i].fuse_modules()
         for i in range(len(self.resnet_block2)):
@@ -88,3 +90,14 @@ class ResNet18(nn.Module):
             self.resnet_block3[i].fuse_modules()
         for i in range(len(self.resnet_block4)):
             self.resnet_block4[i].fuse_modules()
+    
+    def fuse_model_qat(self):
+        quant.fuse_modules_qat(self, ['conv1', 'bn1'], inplace=True)
+        for i in range(len(self.resnet_block1)):
+            self.resnet_block1[i].fuse_modules_qat()
+        for i in range(len(self.resnet_block2)):
+            self.resnet_block2[i].fuse_modules_qat()
+        for i in range(len(self.resnet_block3)):
+            self.resnet_block3[i].fuse_modules_qat()
+        for i in range(len(self.resnet_block4)):
+            self.resnet_block4[i].fuse_modules_qat()

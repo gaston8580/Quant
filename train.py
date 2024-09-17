@@ -1,12 +1,13 @@
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import torch, os, time, argparse, warnings, datetime
+import torch.ao.quantization as quant
 from tools import common_utils
 from torch.optim import lr_scheduler
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
-from tools.quantization_utils import convert_model_float2qat
+from tools.quantization_utils import convert_model_float2qat, convert_model_float2calibration
 
 warnings.filterwarnings('ignore')
 torch.set_printoptions(sci_mode=False)
@@ -83,7 +84,7 @@ def train_one_epoch(dataloader, model, optimizer, loss_fn):
 
 
 def eval_one_epoch(args, dataloader, model, loss_fn):
-    model = torch.quantization.convert(model) if args.stage == 'qat' else model
+    model = quant.convert(model) if args.stage == 'qat' else model
     model.eval()
     loss, current, n = 0.0, 0.0, 0
     with torch.no_grad():
@@ -179,7 +180,7 @@ def train_model(args, model):
         # save model
         if val_acc > max_acc and args.local_rank == 0:
             max_acc = val_acc
-            save_model = torch.quantization.convert(model) if args.stage == 'qat' else model
+            save_model = quant.convert(model) if args.stage == 'qat' else model
             if dist:
                 torch.save(save_model.module.state_dict(), f'{args.output_dir}/{args.model}/{args.stage}_model.pth')
             else:
@@ -201,7 +202,7 @@ def parse_config():
     parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
     parser.add_argument('--lr', type=float, default=0.01, required=False, help='learning rate')
     parser.add_argument('--epochs', type=int, default=32, required=False, help='number of epochs to train')
-    parser.add_argument('--qat_epochs', type=int, default=10, required=False, help='number of epochs to qat')
+    parser.add_argument('--qat_epochs', type=int, default=15, required=False, help='number of epochs to qat')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')
     parser.add_argument('--data_dir', type=str, default='/data/sfs_turbo/perception/animals/', help='data path')
     parser.add_argument('--output_dir', default='outputs', help='dir for saving ckpts and log files')

@@ -1,8 +1,8 @@
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import torch, os, argparse, time
+import torch.ao.quantization as quant
 from tqdm import tqdm
-from models.Alexnet import AlexNet
 from tools import common_utils
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
@@ -39,7 +39,7 @@ def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
 
 
 def calibrate_model(args, dataloader, model):
-    convert_model_float2calibration(model)
+    convert_model_float2qat(model)
     model.eval()
     with torch.no_grad():
         start = time.time()
@@ -54,14 +54,8 @@ def calibrate_model(args, dataloader, model):
     return model
 
 
-def fuse_model_and_convert(model):
-    model.fuse_model()
-    torch.quantization.convert(model, inplace=True)  # Convert model
-    return model
-
-
 def eval_calibration_model(args, dataloader, model):
-    model = fuse_model_and_convert(model)
+    quant.convert(model, inplace=True)  # Convert model
     model.eval()
     loss_fn = nn.CrossEntropyLoss()
     loss, current, n = 0.0, 0.0, 0

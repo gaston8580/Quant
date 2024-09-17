@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import torch, os, argparse, time
-from models.Alexnet import AlexNet
+import torch.ao.quantization as quant
+from tools import common_utils
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
@@ -59,20 +60,19 @@ def eval_one_epoch(dataloader, model):
             # time.sleep(0.5)
 
 
-def eval_single_ckpt():
+def eval_single_ckpt(args, model):
     args = parse_config()
-    ckpt_path = os.path.join(args.output_dir, f'{args.stage}_model.pth')
+    ckpt_path = os.path.join(args.output_dir, args.model, f'{args.stage}_model.pth')
 
-    model = AlexNet()
     model.cuda()
     if args.stage != 'float':
         convert_model_float2qat(model)
     if args.stage == 'qat':
-        torch.quantization.convert(model, inplace=True)
+        quant.convert(model, inplace=True)
         model.load_state_dict(torch.load(ckpt_path))
     elif args.stage == 'calibration':
         model.load_state_dict(torch.load(ckpt_path))
-        torch.quantization.convert(model, inplace=True)
+        quant.convert(model, inplace=True)
     else:
         model.load_state_dict(torch.load(ckpt_path))
 
@@ -82,6 +82,8 @@ def eval_single_ckpt():
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
+    parser.add_argument('--model', type=str, default='ResNet18', choices=['AlexNet', 'ResNet18'], required=False, 
+                        help='model name')
     parser.add_argument('--stage', type=str, default='qat', choices=['float', 'calibration', 'qat'], 
                         required=False, help="the predict stage")
     parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
@@ -93,4 +95,8 @@ def parse_config():
 
 
 if __name__ == '__main__':
-    eval_single_ckpt()
+    args = parse_config()
+    models = common_utils.get_model_map()
+    model = models[args.model]()
+
+    eval_single_ckpt(args, model)

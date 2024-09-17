@@ -7,7 +7,7 @@
 
 |  ResNet18 |float| calibration |  qat  |
 |-----------|-----|-------------|-------|
-| train loss|0.002|      -      | xxxxx |
-| train acc |0.999|      -      | xxxxx |
-| val loss  |0.325|     0.310   | xxxxx |
-| val acc   |0.932|     0.930   | xxxxx |
+| train loss|0.002|      -      | 0.004 |
+| train acc |0.999|      -      | 0.999 |
+| val loss  |0.325|     0.310   | 0.294 |
+| val acc   |0.932|     0.930   | 0.928 |

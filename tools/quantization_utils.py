@@ -1,6 +1,14 @@
 import torch
-from torch.quantization.observer import MinMaxObserver
-from torch.quantization import default_weight_fake_quant, default_observer
+from enum import Enum
+import torch.ao.quantization as quant
+from torch.ao.quantization.observer import MinMaxObserver
+from torch.ao.quantization import QConfig, default_weight_fake_quant, default_observer
+
+
+class FakeQuantState(Enum):
+    QAT = "qat"
+    CALIBRATION = "calibration"
+    VALIDATION = "validation"
 
 
 class SymmetricObserver(MinMaxObserver):
@@ -16,7 +24,7 @@ class SymmetricObserver(MinMaxObserver):
 
 
 def default_calibration_qconfig_setter():
-    qconfig = torch.quantization.QConfig(
+    qconfig = QConfig(
         weight=SymmetricObserver.with_args(dtype=torch.qint8),
         activation=SymmetricObserver.with_args(dtype=torch.qint8),
         )
@@ -24,7 +32,7 @@ def default_calibration_qconfig_setter():
 
 
 def default_qat_qconfig_setter():
-    qconfig = torch.quantization.QConfig(
+    qconfig = QConfig(
         weight=default_weight_fake_quant,
         activation=SymmetricObserver.with_args(dtype=torch.qint8),
         )
@@ -32,10 +40,12 @@ def default_qat_qconfig_setter():
 
 
 def convert_model_float2calibration(model):
+    model.fuse_model()
     model.qconfig = default_calibration_qconfig_setter()
-    torch.quantization.prepare(model, inplace=True)  # Insert observers
+    quant.prepare(model, inplace=True)  # Insert observers
 
 
 def convert_model_float2qat(model):
+    model.fuse_model_qat()
     model.qconfig = default_qat_qconfig_setter()
-    torch.quantization.prepare_qat(model, inplace=True)  # Insert observers and fake quantizers
+    quant.prepare_qat(model, inplace=True)  # Insert observers and fake quantizers
