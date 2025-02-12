@@ -45,7 +45,8 @@ def convert_model_float2calibration(model):
     quant.prepare(model, inplace=True)  # Insert observers
 
 
-def convert_model_float2qat(model):
-    model.fuse_model_qat()
+def convert_model_float2qat(args, model):
+    if args.model == 'ResNet18':
+        model.fuse_model_qat()
     model.qconfig = default_qat_qconfig_setter()
     quant.prepare_qat(model, inplace=True)  # Insert observers and fake quantizers

@@ -39,7 +39,7 @@ def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
 
 
 def calibrate_model(args, dataloader, model):
-    convert_model_float2qat(model)
+    convert_model_float2qat(args, model)
     model.eval()
     with torch.no_grad():
         start = time.time()
@@ -89,7 +89,7 @@ def calibration(args, model):
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--model', type=str, default='ResNet18', choices=['AlexNet', 'ResNet18'], required=False, 
+    parser.add_argument('--model', type=str, default='AlexNet', choices=['AlexNet', 'ResNet18'], required=False, 
                         help='model name')
     parser.add_argument('--mode', type=str, default='cuda', required=False, help='gpu or cpu')
     parser.add_argument('--batch_size', type=int, default=32, required=False, help='batch size for training')

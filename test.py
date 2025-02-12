@@ -15,6 +15,7 @@ def visualize_image(image_tensor, title=None, cmap=None):
         title (str, optional): 图像标题
         cmap (str, optional): 用于灰度图像的颜色映射
     """
+    plt.close()
     image_tensor = (image_tensor + 1) / 2  # 将[-1,1]的像素值恢复到[0,1]
     image_np = image_tensor.cpu().numpy()
     # 处理灰度图像
@@ -32,7 +33,6 @@ def visualize_image(image_tensor, title=None, cmap=None):
         plt.title(title)
     plt.axis('off')  # 隐藏坐标轴
     plt.show()
-    plt.close()
 
 
 def build_dataloader(data_dir, batch_size, workers=4):
@@ -66,7 +66,7 @@ def eval_single_ckpt(args, model):
 
     model.cuda()
     if args.stage != 'float':
-        convert_model_float2qat(model)
+        convert_model_float2qat(args, model)
     if args.stage == 'qat':
         quant.convert(model, inplace=True)
         model.load_state_dict(torch.load(ckpt_path))
@@ -82,7 +82,7 @@ def eval_single_ckpt(args, model):
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--model', type=str, default='ResNet18', choices=['AlexNet', 'ResNet18'], required=False, 
+    parser.add_argument('--model', type=str, default='AlexNet', choices=['AlexNet', 'ResNet18'], required=False, 
                         help='model name')
     parser.add_argument('--stage', type=str, default='qat', choices=['float', 'calibration', 'qat'], 
                         required=False, help="the predict stage")

@@ -1,6 +1,6 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import torch, argparse
+import torch, onnx, argparse
 import torch.ao.quantization as quant
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
@@ -38,7 +38,7 @@ def export_onnx(args, model):
 
     model.cuda()
     if args.stage != 'float':
-        convert_model_float2qat(model)
+        convert_model_float2qat(args, model)
     if args.stage == 'qat':
         quant.convert(model, inplace=True)
         model.load_state_dict(torch.load(ckpt_path))
@@ -63,20 +63,21 @@ def export_onnx(args, model):
             model,
             dummy_input,
             save_path,
-            # input_names=["image"],
-            output_names=None,
+            input_names=["image"],
+            output_names=["class"],
             opset_version=13,
             do_constant_folding=False,
             export_params=True,
             verbose=True,
         )
+        os.system(f'onnxsim {save_path} {save_path}')
 
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--model', type=str, default='ResNet18', choices=['AlexNet', 'ResNet18'], required=False, 
+    parser.add_argument('--model', type=str, default='AlexNet', choices=['AlexNet', 'ResNet18'], required=False, 
                         help='model name')
-    parser.add_argument('--stage', type=str, default='calibration', choices=['float', 'calibration', 'qat'], 
+    parser.add_argument('--stage', type=str, default='float', choices=['float', 'calibration', 'qat'], 
                         required=False, help="the predict stage")
     parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')

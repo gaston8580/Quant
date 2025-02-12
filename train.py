@@ -134,7 +134,7 @@ def train_model(args, model):
 
     if args.stage == 'qat':
         args.epochs = args.qat_epochs
-        convert_model_float2qat(model)
+        convert_model_float2qat(args, model)
         ckpt_path = os.path.join(args.output_dir, args.model, 'calibration_model.pth')
         model.load_state_dict(torch.load(ckpt_path))
     
@@ -195,7 +195,7 @@ def train_model(args, model):
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--model', type=str, default='ResNet18', choices=['AlexNet', 'ResNet18'], required=False, 
+    parser.add_argument('--model', type=str, default='AlexNet', choices=['AlexNet', 'ResNet18'], required=False, 
                         help='model name')
     parser.add_argument('--stage', type=str, default='qat', choices=['float', 'qat'], required=False, 
                         help='the train stage')
