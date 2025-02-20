@@ -3,5 +3,6 @@ __pycache__/
 *.pth
 *.onnx
 *.engine
+*.cache
 *.png
 *.txt
