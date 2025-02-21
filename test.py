@@ -5,34 +5,8 @@ from tools import common_utils
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
+from tools.common_utils import visualize_image
 from tools.quantization_utils import convert_model_float2calibration, convert_model_float2qat
-
-
-def visualize_image(image_tensor, title=None, cmap=None):
-    """
-    args:
-        image_tensor (torch.Tensor): shape为 (C, H, W) 或 (H, W) 的图像张量
-        title (str, optional): 图像标题
-        cmap (str, optional): 用于灰度图像的颜色映射
-    """
-    plt.close()
-    image_tensor = (image_tensor + 1) / 2  # 将[-1,1]的像素值恢复到[0,1]
-    image_np = image_tensor.cpu().numpy()
-    # 处理灰度图像
-    if image_np.ndim == 2:
-        plt.imshow(image_np, cmap=cmap)
-    # 处理彩色图像
-    elif image_np.ndim == 3:
-        if image_np.shape[0] == 3:  # (C, H, W) -> (H, W, C)
-            image_np = image_np.transpose(1, 2, 0)
-        plt.imshow(image_np)
-    else:
-        raise ValueError('The dimension of the image tensor must be 2 or 3')
-    
-    if title:
-        plt.title(title)
-    plt.axis('off')  # 隐藏坐标轴
-    plt.show()
 
 
 def build_dataloader(data_dir, batch_size, workers=4):

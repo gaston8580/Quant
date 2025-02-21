@@ -3,39 +3,8 @@ import matplotlib.pyplot as plt
 import torch, os, argparse, time
 import torch.ao.quantization as quant
 from tqdm import tqdm
-from tools import common_utils
-from torchvision import transforms
-from torchvision.datasets import ImageFolder
-from torch.utils.data import DataLoader
+from tools.common_utils import build_dataloader, get_model_map
 from tools.quantization_utils import convert_model_float2qat, convert_model_float2calibration
-
-
-def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
-    normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # 将[0,1]的像素值归一化到[-1,1]
-    if training:
-        transform = transforms.Compose([transforms.Resize((224, 224)),
-                                        transforms.RandomVerticalFlip(),  # 随机垂直翻转, 增强数据
-                                        transforms.ToTensor(),
-                                        normalize])
-        dataset = ImageFolder(f'{data_dir}/train', transform=transform)
-    else:
-        transform = transforms.Compose([transforms.Resize((224, 224)),
-                                        transforms.ToTensor(),
-                                        normalize])
-        dataset = ImageFolder(f'{data_dir}/val', transform=transform)
-
-    if dist:
-        if training:
-            sampler = torch.utils.data.distributed.DistributedSampler(dataset)
-        else:
-            rank, world_size = common_utils.get_dist_info()
-            sampler = torch.utils.data.distributed.DistributedSampler(dataset, world_size, rank, shuffle=False)
-    else:
-        sampler = None
-
-    dataloader = DataLoader(dataset, batch_size=batch_size, pin_memory=True, num_workers=workers, 
-                            shuffle=(sampler is None) and training, sampler=sampler)
-    return dataloader, sampler
 
 
 def calibrate_model(args, dataloader, model):
@@ -104,7 +73,7 @@ def parse_config():
 
 if __name__ == '__main__':
     args = parse_config()
-    models = common_utils.get_model_map()
+    models = get_model_map()
     model = models[args.model]()
 
     calibration(args, model)

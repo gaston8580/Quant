@@ -9,9 +9,12 @@ import os
 import subprocess
 import pickle
 import shutil
-from torch import Tensor
 from models.Alexnet import AlexNet
 from models.ResNet18 import ResNet18
+import matplotlib.pyplot as plt
+from torchvision import transforms
+from torchvision.datasets import ImageFolder
+from torch.utils.data import DataLoader
 
 
 def get_model_map():
@@ -137,3 +140,58 @@ def merge_results_dist(result_part, size, tmpdir):
     ordered_results = ordered_results[:size]
     shutil.rmtree(tmpdir)
     return ordered_results
+
+
+def build_dataloader(dist, data_dir, batch_size, workers=4, training=True):
+    normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # 将[0,1]的像素值归一化到[-1,1]
+    if training:
+        transform = transforms.Compose([transforms.Resize((224, 224)),
+                                        transforms.RandomVerticalFlip(),  # 随机垂直翻转, 增强数据
+                                        transforms.ToTensor(),
+                                        normalize])
+        dataset = ImageFolder(f'{data_dir}/train', transform=transform)
+    else:
+        transform = transforms.Compose([transforms.Resize((224, 224)),
+                                        transforms.ToTensor(),
+                                        normalize])
+        dataset = ImageFolder(f'{data_dir}/val', transform=transform)
+
+    if dist:
+        if training:
+            sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+        else:
+            rank, world_size = get_dist_info()
+            sampler = torch.utils.data.distributed.DistributedSampler(dataset, world_size, rank, shuffle=False)
+    else:
+        sampler = None
+
+    dataloader = DataLoader(dataset, batch_size=batch_size, pin_memory=True, num_workers=workers, 
+                            shuffle=(sampler is None) and training, sampler=sampler)
+    return dataloader, sampler
+
+
+def visualize_image(image_tensor, title=None, cmap=None):
+    """
+    args:
+        image_tensor (torch.Tensor): shape为 (C, H, W) 或 (H, W) 的图像张量
+        title (str, optional): 图像标题
+        cmap (str, optional): 用于灰度图像的颜色映射
+    """
+    plt.close()
+    image_tensor = (image_tensor + 1) / 2  # 将[-1,1]的像素值恢复到[0,1]
+    image_np = image_tensor.cpu().numpy()
+    # 处理灰度图像
+    if image_np.ndim == 2:
+        plt.imshow(image_np, cmap=cmap)
+    # 处理彩色图像
+    elif image_np.ndim == 3:
+        if image_np.shape[0] == 3:  # (C, H, W) -> (H, W, C)
+            image_np = image_np.transpose(1, 2, 0)
+        plt.imshow(image_np)
+    else:
+        raise ValueError('The dimension of the image tensor must be 2 or 3')
+    
+    if title:
+        plt.title(title)
+    plt.axis('off')  # 隐藏坐标轴
+    plt.show()

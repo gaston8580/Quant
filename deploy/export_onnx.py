@@ -75,7 +75,7 @@ def export_onnx(args, model):
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--model', type=str, default='AlexNet', choices=['AlexNet', 'ResNet18'], required=False, 
+    parser.add_argument('--model', type=str, default='ResNet18', choices=['AlexNet', 'ResNet18'], required=False, 
                         help='model name')
     parser.add_argument('--stage', type=str, default='float', choices=['float', 'calibration', 'qat'], 
                         required=False, help="the predict stage")

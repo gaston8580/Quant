@@ -18,7 +18,7 @@ class Calibrator(trt.IInt8EntropyCalibrator2):
         self.device_input = cuda.mem_alloc(self.data[0].nbytes)
 
     def get_batch_size(self):
-        return 1
+        return self.data[0].shape[0]
 
     def get_batch(self, names):
         if self.current_index < len(self.data):
@@ -50,10 +50,10 @@ def calibration_trt(args):
         calibration_data.append(image.numpy())
 
     # 创建校准器
-    calibrator = Calibrator(calibration_data, f"deploy/onnx/{args.model}_calibration.cache")
+    calibrator = Calibrator(calibration_data, f"{args.output_dir}/{args.model}_calibration.cache")
 
     # 加载ONNX模型
-    with open(f"deploy/onnx/{args.model}_float.onnx", "rb") as f:
+    with open(f"{args.output_dir}/{args.model}_float.onnx", "rb") as f:
         onnx_model = f.read()
 
     # 创建TensorRT构建器
@@ -74,12 +74,12 @@ def calibration_trt(args):
     # 保存engine
     flag_use_trtexec = 0
     if not flag_use_trtexec:
-        with open(f'deploy/onnx/{args.model}_int8.engine', 'wb') as f:
+        with open(f'{args.output_dir}/{args.model}_int8.engine', 'wb') as f:
             f.write(engine.serialize())
     else:
-        os.system(f'trtexec --onnx=deploy/onnx/{args.model}_float.onnx ' + \
-                  f'--saveEngine=deploy/onnx/{args.model}_int8.engine ' + \
-                  f'--calib=deploy/onnx/{args.model}_calibration.cache --int8')
+        os.system(f'trtexec --onnx={args.output_dir}/{args.model}_float.onnx ' + \
+                  f'--saveEngine={args.output_dir}/{args.model}_int8.engine ' + \
+                  f'--calib={args.output_dir}/{args.model}_calibration.cache --int8')
 
 
 def parse_config():
@@ -90,8 +90,7 @@ def parse_config():
     parser.add_argument('--steps', type=int, default=300, required=False, help='step nums for calibration')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')
     parser.add_argument('--data_dir', type=str, default='/data/sfs_turbo/perception/animals/', help='data path')
-    parser.add_argument('--output_dir', default='outputs', help='dir for saving ckpts and log files')
-    parser.add_argument('--ckpt', type=str, default='float_model.pth', help='checkpoint to start from')
+    parser.add_argument('--output_dir', default='deploy/onnx', help='dir for saving ckpts and log files')
     args = parser.parse_args()
     return args
 
