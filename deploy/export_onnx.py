@@ -1,6 +1,6 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import torch, onnx, argparse
+import torch, argparse
 import torch.ao.quantization as quant
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
@@ -79,7 +79,6 @@ def parse_config():
                         help='model name')
     parser.add_argument('--stage', type=str, default='float', choices=['float', 'calibration', 'qat'], 
                         required=False, help="the predict stage")
-    parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')
     parser.add_argument('--data_dir', type=str, default='/data/sfs_turbo/perception/animals/', help='data path')
     parser.add_argument('--ckpt_dir', default='outputs', help='dir for saving ckpts and log files')

@@ -56,9 +56,9 @@ def eval_single_ckpt(args, model):
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--model', type=str, default='AlexNet', choices=['AlexNet', 'ResNet18'], required=False, 
+    parser.add_argument('--model', type=str, default='ResNet18', choices=['AlexNet', 'ResNet18'], required=False, 
                         help='model name')
-    parser.add_argument('--stage', type=str, default='qat', choices=['float', 'calibration', 'qat'], 
+    parser.add_argument('--stage', type=str, default='float', choices=['float', 'calibration', 'qat'], 
                         required=False, help="the predict stage")
     parser.add_argument('--batch_size', type=int, default=128, required=False, help='batch size for training')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')

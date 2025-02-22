@@ -65,6 +65,8 @@ def calibration_trt(args):
 
     # 设置构建器配置
     config = builder.create_builder_config()
+    if args.mixed_precision:
+        config.set_flag(trt.BuilderFlag.FP16)
     config.set_flag(trt.BuilderFlag.INT8)
     config.int8_calibrator = calibrator
 
@@ -73,19 +75,22 @@ def calibration_trt(args):
 
     # 保存engine
     flag_use_trtexec = 0
+    engine_suffix = '_int8_fp16' if args.mixed_precision else '_int8'
     if not flag_use_trtexec:
-        with open(f'{args.output_dir}/{args.model}_int8.engine', 'wb') as f:
+        with open(f'{args.output_dir}/{args.model}{engine_suffix}.engine', 'wb') as f:
             f.write(engine.serialize())
     else:
+        trtexec_suffix = '--int8 --fp16' if args.mixed_precision else '--int8'
         os.system(f'trtexec --onnx={args.output_dir}/{args.model}_float.onnx ' + \
-                  f'--saveEngine={args.output_dir}/{args.model}_int8.engine ' + \
-                  f'--calib={args.output_dir}/{args.model}_calibration.cache --int8')
+                  f'--saveEngine={args.output_dir}/{args.model}{engine_suffix}.engine ' + \
+                  f'--calib={args.output_dir}/{args.model}_calibration.cache {trtexec_suffix}')
 
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--model', type=str, default='ResNet18', choices=['AlexNet', 'ResNet18'], required=False, 
                         help='model name')
+    parser.add_argument('--mixed_precision', type=int, default=1, help='whether use mixed precision')
     parser.add_argument('--batch_size', type=int, default=1, required=False, help='batch size for training')
     parser.add_argument('--steps', type=int, default=300, required=False, help='step nums for calibration')
     parser.add_argument('--workers', type=int, default=10, help='number of workers for dataloader')
