@@ -71,14 +71,14 @@ def calibration_trt(args):
     config.int8_calibrator = calibrator
 
     # 构建engine, 并生成calibration.cache
-    engine = builder.build_engine(network, config)
+    engine_bytes = builder.build_serialized_network(network, config)
 
     # 保存engine
     flag_use_trtexec = 0
     engine_suffix = '_int8_fp16' if args.mixed_precision else '_int8'
     if not flag_use_trtexec:
         with open(f'{args.output_dir}/{args.model}{engine_suffix}.engine', 'wb') as f:
-            f.write(engine.serialize())
+            f.write(engine_bytes)
     else:
         trtexec_suffix = '--int8 --fp16' if args.mixed_precision else '--int8'
         os.system(f'trtexec --onnx={args.output_dir}/{args.model}_float.onnx ' + \

@@ -10,8 +10,8 @@ from tqdm import tqdm
 from tools.common_utils import visualize_image, build_dataloader
 
 # for compatibility with older numpy versions
-if not hasattr(np, 'bool'):
-    np.bool = np.bool_
+# if not hasattr(np, 'bool'):
+#     np.bool = np.bool_
 
 
 def load_engine(engine_path):
@@ -25,20 +25,20 @@ def TRTEngineInit(trt_path):
     context = engine.create_execution_context()
     inputs, outputs, bindings, input_name2idx_dict, output_name2idx_dict = [], [], [], {}, {}
 
-    num_bindings = engine.num_bindings
-    for binding_idx in range(num_bindings):
-        binding_name = engine.get_binding_name(binding_idx)
-        size = trt.volume(engine.get_binding_shape(binding_idx))
-        dtype = trt.nptype(engine.get_binding_dtype(binding_idx))
+    binding_idx = 0
+    for tensor_name in engine:
+        size = trt.volume(engine.get_tensor_shape(tensor_name))
+        dtype = trt.nptype(engine.get_tensor_dtype(tensor_name))
         host_mem = cuda.pagelocked_empty(size, dtype)
         device_mem = cuda.mem_alloc(host_mem.nbytes)  # 分配device内存
         bindings.append(device_mem)
-        if engine.binding_is_input(binding_idx):
+        if engine.get_tensor_mode(tensor_name) == trt.TensorIOMode.INPUT:
             inputs.append(host_mem)
-            input_name2idx_dict[binding_name] = binding_idx
+            input_name2idx_dict[tensor_name] = binding_idx
         else:
             outputs.append(host_mem)
-            output_name2idx_dict[binding_name] = binding_idx
+            output_name2idx_dict[tensor_name] = binding_idx
+        binding_idx += 1
     for name in output_name2idx_dict.keys():
         output_name2idx_dict[name] = output_name2idx_dict[name] - len(inputs)
     return inputs, outputs, bindings, context, input_name2idx_dict, output_name2idx_dict, engine
